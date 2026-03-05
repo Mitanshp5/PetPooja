@@ -20,7 +20,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/menu" element={<MobileMenu />} />
+          <Route path="/menu" element={<MobileMenu />} /> {/* Fallback without table */}
+          <Route path="/m/:tableId" element={<MobileMenu />} />
           <Route path="/kitchen" element={<KitchenDisplay />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
