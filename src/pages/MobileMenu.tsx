@@ -2,10 +2,13 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { menuItems, categories } from "@/data/mockData";
 import { Search, Leaf, ShoppingCart, Plus, Minus, QrCode } from "lucide-react";
+import { toast } from "sonner";
+import { usePlaceOrder } from "@/hooks/useApi";
 import VoiceOrderingAssistant from "@/components/voice/VoiceOrderingAssistant";
 
 const MobileMenu = () => {
   const { tableId } = useParams();
+  const { mutateAsync: placeOrder } = usePlaceOrder();
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -51,6 +54,39 @@ const MobileMenu = () => {
     if (n <= 0) { const { [id]: _, ...rest } = prev; return rest; }
     return { ...prev, [id]: n };
   });
+
+  const handleCheckout = async () => {
+    if (cartCount === 0) return;
+    
+    // Map cart items
+    const orderItems = Object.entries(cart).map(([id, qty]) => {
+      const item = menuItems.find((m) => m.id === id);
+      return {
+        name: item?.name || "Unknown Item",
+        qty: qty,
+        modifiers: [],
+        notes: ""
+      };
+    });
+
+    const payload = {
+      orderNumber: `KOT-${Math.floor(100 + Math.random() * 900)}`,
+      items: orderItems,
+      status: "new",
+      type: "dine-in",
+      table: "T-10",
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      elapsed: 0
+    };
+
+    try {
+      await placeOrder(payload);
+      toast.success("Order placed successfully!");
+      setCart({});
+    } catch (error) {
+      toast.error("Error placing order. Please try again.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background max-w-md mx-auto relative">
@@ -145,8 +181,11 @@ const MobileMenu = () => {
               <span className="text-primary-foreground/80">|</span>
               <span className="font-bold">₹{cartTotal}</span>
             </div>
-            <button className="bg-primary-foreground/20 text-primary-foreground font-semibold px-5 py-2 rounded-xl text-sm hover:bg-primary-foreground/30 transition-colors">
-              View Cart →
+            <button 
+              onClick={handleCheckout}
+              className="bg-primary-foreground/20 text-primary-foreground font-semibold px-5 py-2 rounded-xl text-sm hover:bg-primary-foreground/30 transition-colors"
+            >
+              Place Order →
             </button>
           </div>
         </div>
