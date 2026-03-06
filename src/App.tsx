@@ -8,6 +8,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import MobileMenu from "./pages/MobileMenu";
 import KitchenDisplay from "./pages/KitchenDisplay";
 import NotFound from "./pages/NotFound";
+import CartPage from "./pages/CartPage";
 
 import Overview from "./pages/admin/Overview";
 import MenuIntelligence from "./pages/admin/MenuIntelligence";
@@ -36,6 +37,8 @@ const App = () => (
           {/* Customer Application Routes */}
           <Route path="/menu" element={<MobileMenu />} /> {/* Fallback without table */}
           <Route path="/m/:tableId" element={<MobileMenu />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/cart/:tableId" element={<CartPage />} />
           <Route path="/kitchen" element={<KitchenDisplay />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

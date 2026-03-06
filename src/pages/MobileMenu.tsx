@@ -1,32 +1,65 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { menuItems, categories } from "@/data/mockData";
-import { Search, Leaf, ShoppingCart, Plus, Minus, QrCode } from "lucide-react";
+import { Search, Leaf, ShoppingCart, Plus, Minus, QrCode, X } from "lucide-react";
 import VoiceOrderingAssistant from "@/components/voice/VoiceOrderingAssistant";
-import { toast } from "sonner";
-import { usePlaceOrder } from "@/hooks/useApi";
+
+export interface CartItem {
+  id: string; // Unique ID for this cart instance
+  menuItemId: string;
+  name: string;
+  price: number;
+  qty: number;
+  modifiers: string[];
+  notes: string;
+}
 
 const MobileMenu = () => {
   const { tableId } = useParams();
-  const { mutateAsync: placeOrder } = usePlaceOrder();
+  const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<CartItem[]>([]);
+  
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [modifiers, setModifiers] = useState<string[]>([]);
+  const [notes, setNotes] = useState("");
 
   const handleVoiceCartUpdate = (data: any) => {
     if (data.function === 'process_order' && data.args.items) {
       setCart((prev) => {
-        let newCart = { ...prev };
+        let newCart = [...prev];
         data.args.items.forEach((item: any) => {
-          // Attempt to find the item ID based on the name from the mock data
           const menuItem = menuItems.find(m => m.name.toLowerCase() === item.item_name.toLowerCase());
           if (menuItem) {
             if (item.action === 'add') {
-              newCart[menuItem.id] = (newCart[menuItem.id] || 0) + item.quantity;
+              const existingIndex = newCart.findIndex(c => c.menuItemId === menuItem.id && c.modifiers.length === 0 && !c.notes);
+              if (existingIndex >= 0) {
+                newCart[existingIndex].qty += item.quantity;
+              } else {
+                newCart.push({
+                  id: Date.now().toString() + Math.random().toString(),
+                  menuItemId: menuItem.id,
+                  name: menuItem.name,
+                  price: menuItem.sellingPrice,
+                  qty: item.quantity,
+                  modifiers: [],
+                  notes: ""
+                });
+              }
             } else if (item.action === 'remove') {
-              const current = newCart[menuItem.id] || 0;
-              if (current <= item.quantity) delete newCart[menuItem.id];
-              else newCart[menuItem.id] = current - item.quantity;
+              let qtyToRemove = item.quantity;
+              for (let i = newCart.length - 1; i >= 0 && qtyToRemove > 0; i--) {
+                if (newCart[i].menuItemId === menuItem.id) {
+                  if (newCart[i].qty > qtyToRemove) {
+                    newCart[i].qty -= qtyToRemove;
+                    qtyToRemove = 0;
+                  } else {
+                    qtyToRemove -= newCart[i].qty;
+                    newCart.splice(i, 1);
+                  }
+                }
+              }
             }
           }
         });
@@ -42,50 +75,58 @@ const MobileMenu = () => {
     return matchCategory && matchSearch;
   });
 
-  const cartCount = Object.values(cart).reduce((a, b) => a + b, 0);
-  const cartTotal = Object.entries(cart).reduce((total, [id, qty]) => {
-    const item = menuItems.find((m) => m.id === id);
-    return total + (item ? item.sellingPrice * qty : 0);
-  }, 0);
+  const cartCount = cart.reduce((total, item) => total + item.qty, 0);
+  const cartTotal = cart.reduce((total, item) => total + (item.price * item.qty), 0);
+  
+  const getQty = (menuItemId: string) => cart.filter(c => c.menuItemId === menuItemId).reduce((sum, c) => sum + c.qty, 0);
 
-  const addToCart = (id: string) => setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-  const removeFromCart = (id: string) => setCart((prev) => {
-    const n = (prev[id] || 0) - 1;
-    if (n <= 0) { const { [id]: _, ...rest } = prev; return rest; }
-    return { ...prev, [id]: n };
-  });
+  const handleOpenCustomization = (item: any) => {
+    setSelectedItem(item);
+    setModifiers([]);
+    setNotes("");
+  };
 
-  const handleCheckout = async () => {
-    if (cartCount === 0) return;
-
-    // Map cart items
-    const orderItems = Object.entries(cart).map(([id, qty]) => {
-      const item = menuItems.find((m) => m.id === id);
-      return {
-        name: item?.name || "Unknown Item",
-        qty: qty,
-        modifiers: [],
-        notes: ""
-      };
+  const confirmAddToCart = () => {
+    if (!selectedItem) return;
+    setCart(prev => {
+      const existing = prev.findIndex(c => c.menuItemId === selectedItem.id && c.modifiers.join(',') === modifiers.join(',') && c.notes === notes);
+      if (existing >= 0) {
+        const next = [...prev];
+        next[existing].qty += 1;
+        return next;
+      }
+      return [...prev, {
+        id: Date.now().toString() + Math.random().toString(),
+        menuItemId: selectedItem.id,
+        name: selectedItem.name,
+        price: selectedItem.sellingPrice,
+        qty: 1,
+        modifiers,
+        notes
+      }];
     });
+    setSelectedItem(null);
+  };
 
-    const payload = {
-      orderNumber: `KOT-${Math.floor(100 + Math.random() * 900)}`,
-      items: orderItems,
-      status: "new",
-      type: "dine-in",
-      table: "T-10",
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      elapsed: 0
-    };
+  const removeOneFromCart = (menuItemId: string) => {
+    setCart(prev => {
+      // Find the last added variant of this item
+      const index = prev.map(c => c.menuItemId).lastIndexOf(menuItemId);
+      if (index === -1) return prev;
+      
+      const next = [...prev];
+      if (next[index].qty > 1) {
+        next[index].qty -= 1;
+      } else {
+        next.splice(index, 1);
+      }
+      return next;
+    });
+  };
 
-    try {
-      await placeOrder(payload);
-      toast.success("Order placed successfully!");
-      setCart({});
-    } catch (error) {
-      toast.error("Error placing order. Please try again.");
-    }
+  const handleCheckout = () => {
+    if (cartCount === 0) return;
+    navigate("/cart", { state: { cart, tableId } });
   };
 
   return (
@@ -145,19 +186,19 @@ const MobileMenu = () => {
               <span className="font-bold text-foreground">₹{item.sellingPrice}</span>
             </div>
             <div className="flex flex-col items-center gap-1">
-              {cart[item.id] ? (
+              {getQty(item.id) > 0 ? (
                 <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-1">
-                  <button onClick={() => removeFromCart(item.id)} className="w-7 h-7 flex items-center justify-center text-primary">
+                  <button onClick={() => removeOneFromCart(item.id)} className="w-7 h-7 flex items-center justify-center text-primary">
                     <Minus className="w-4 h-4" />
                   </button>
-                  <span className="text-sm font-bold text-primary w-4 text-center">{cart[item.id]}</span>
-                  <button onClick={() => addToCart(item.id)} className="w-7 h-7 flex items-center justify-center text-primary">
+                  <span className="text-sm font-bold text-primary w-4 text-center">{getQty(item.id)}</span>
+                  <button onClick={() => handleOpenCustomization(item)} className="w-7 h-7 flex items-center justify-center text-primary">
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
               ) : (
                 <button
-                  onClick={() => addToCart(item.id)}
+                  onClick={() => handleOpenCustomization(item)}
                   className="px-4 py-1.5 rounded-lg border-2 border-primary text-primary text-sm font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
                 >
                   ADD
@@ -167,6 +208,55 @@ const MobileMenu = () => {
           </div>
         ))}
       </div>
+
+      {/* Customization Modal */}
+      {selectedItem && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-md bg-card rounded-t-3xl sm:rounded-3xl shadow-elevated p-6 animate-slide-up">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-display font-bold text-xl">Customize {selectedItem.name}</h2>
+              <button onClick={() => setSelectedItem(null)} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-sm font-semibold mb-2 block">Modifiers (Optional)</label>
+                <div className="flex flex-wrap gap-2">
+                  {["Spicy", "Mild", "Jain"].map(mod => (
+                    <button
+                      key={mod}
+                      onClick={() => setModifiers(prev => prev.includes(mod) ? prev.filter(m => m !== mod) : [...prev, mod])}
+                      className={`px-4 py-2 border rounded-full text-sm font-medium transition-colors ${modifiers.includes(mod) ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground hover:bg-muted"}`}
+                    >
+                      {mod}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-sm font-semibold mb-2 block">Customer Note</label>
+                <textarea 
+                  className="w-full bg-muted text-foreground placeholder-muted-foreground rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                  rows={3}
+                  placeholder="E.g. Extra onions, less oil..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <button 
+              onClick={confirmAddToCart}
+              className="w-full gradient-warm text-primary-foreground font-bold px-5 py-4 rounded-xl shadow-glow transition-all"
+            >
+              Confirm \u2013 Add to Cart
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Voice Assistant */}
       <VoiceOrderingAssistant onCartUpdate={handleVoiceCartUpdate} />
@@ -185,7 +275,7 @@ const MobileMenu = () => {
               onClick={handleCheckout}
               className="bg-primary-foreground/20 text-primary-foreground font-semibold px-5 py-2 rounded-xl text-sm hover:bg-primary-foreground/30 transition-colors"
             >
-              Place Order →
+              Review Order →
             </button>
           </div>
         </div>
