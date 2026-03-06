@@ -18,6 +18,7 @@ export interface MenuItem {
 
 export interface Order {
   id: string;
+  _id?: string;
   orderNumber: string;
   items: { name: string; qty: number; modifiers?: string[]; notes?: string }[];
   status: "new" | "preparing" | "ready" | "served";
