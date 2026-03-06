@@ -6,12 +6,14 @@ export const VoiceConsole = () => {
     const [isRecording, setIsRecording] = useState(false);
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'speaking'>('idle');
     const [error, setError] = useState<string | null>(null);
-    const [transcript, setTranscript] = useState<{ role: 'user' | 'assistant', text: string }[]>([]);
+    const [transcript, setTranscript] = useState<{ role: 'user' | 'assistant' | 'action', text: string }[]>([]);
+    const [interimUserText, setInterimUserText] = useState("");
 
     const socketRef = useRef<WebSocket | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
+    const recognitionRef = useRef<any>(null);
     const audioQueue = useRef<Float32Array[]>([]);
     const isPlaying = useRef(false);
 
@@ -54,14 +56,18 @@ export const VoiceConsole = () => {
                             speechConfig: {
                                 voiceConfig: {
                                     prebuiltVoiceConfig: {
-                                        voiceName: "Kore" // Female Voice
+                                        voiceName: "Aoede" // Female Voice
                                     }
                                 }
                             }
                         },
                         systemInstruction: {
                             parts: [{
-                                text: "You are a Voice ordering copilot for PetPooja. ALWAYS use the 'process_order' tool for orders. Speak EXTREMELY SLOWLY and CALMLY. Your VERY FIRST response must be exactly: 'Namaste! PetPooja mein aapka swagat hai. Main aapki kaise sahayata kar sakti hoon?' Rules: 1. DO NOT use markdown. 2. Start directly with the greeting. 3. Output ONLY spoken words."
+                                text: `CRITICAL DIRECTIVE: You are PetPooja's voice ordering assistant.
+1. NEVER THINK OUT LOUD. NEVER explain what you are doing. NEVER output your internal thoughts or plans.
+2. ONLY output the FINAL WORDS you want the customer to hear. 
+3. YOUR VERY FIRST RESPONSE MUST BE EXACTLY: 'Namaste! PetPooja mein aapka swagat hai. Main aapki kaise sahayata kar sakti hoon?'
+4. ALWAYS use the 'process_order' tool immediately when users order.`
                             }]
                         },
                         tools: [{
@@ -132,6 +138,33 @@ export const VoiceConsole = () => {
                         }));
                     };
 
+                    // Start Speech Recognition for User Transcription
+                    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                    if (SpeechRecognition) {
+                        recognitionRef.current = new SpeechRecognition();
+                        recognitionRef.current.continuous = true;
+                        recognitionRef.current.interimResults = true;
+                        recognitionRef.current.lang = 'en-IN'; // Indian English / Hinglish
+                        recognitionRef.current.onresult = (event: any) => {
+                            let interim = "";
+                            let finalTranscript = "";
+
+                            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                                if (event.results[i].isFinal) {
+                                    finalTranscript += event.results[i][0].transcript;
+                                } else {
+                                    interim += event.results[i][0].transcript;
+                                }
+                            }
+
+                            if (finalTranscript) {
+                                setTranscript(prev => [...prev, { role: 'user', text: finalTranscript }]);
+                            }
+                            setInterimUserText(interim);
+                        };
+                        recognitionRef.current.start();
+                    }
+
                     // Initial spark to trigger the greeting
                     socketRef.current?.send(JSON.stringify({
                         clientContent: {
@@ -162,7 +195,16 @@ export const VoiceConsole = () => {
                                 processAudioQueue();
                             }
                             if (part.text) {
-                                setTranscript(prev => [...prev, { role: 'assistant', text: part.text }]);
+                                setTranscript(prev => {
+                                    const newPrev = [...prev];
+                                    const last = newPrev[newPrev.length - 1];
+                                    if (last && last.role === 'assistant') {
+                                        last.text += part.text;
+                                    } else {
+                                        newPrev.push({ role: 'assistant', text: part.text });
+                                    }
+                                    return newPrev;
+                                });
                             }
                         }
                     }
@@ -170,7 +212,20 @@ export const VoiceConsole = () => {
 
                 if (data.toolCall) {
                     for (const call of data.toolCall.functionCalls) {
-                        setTranscript(prev => [...prev, { role: 'assistant', text: `[ACTION]: ${call.name} -> ${JSON.stringify(call.args)}` }]);
+                        const actionStr = `[ACTION]: ${call.name} -> ${JSON.stringify(call.args)}`;
+                        setTranscript(prev => {
+                            // Prevent duplicate tool call logs
+                            let lastAction = null;
+                            for (let i = prev.length - 1; i >= 0; i--) {
+                                if (prev[i].role === 'action') {
+                                    lastAction = prev[i];
+                                    break;
+                                }
+                            }
+                            if (lastAction && lastAction.text === actionStr) return prev;
+                            return [...prev, { role: 'action', text: actionStr }];
+                        });
+
                         // We would call backend here if this were real, but this is a UI demo
                         // Send dummy response back to Gemini to keep it happy
                         socketRef.current?.send(JSON.stringify({
@@ -226,10 +281,31 @@ export const VoiceConsole = () => {
             const source = audioContextRef.current.createBufferSource();
             source.buffer = buffer;
 
-            // THE CRITICAL REQUIREMENT: 0.25x SPEED
-            source.playbackRate.value = 0.25;
+            // --- ANTI-CREEPY AUDIO PROCESSING (Pitch, Formant, EQ) ---
 
-            source.connect(audioContextRef.current.destination);
+            // 1. Pitch & Formant Shift
+            // We use playbackRate to achieve both Pitch and Formant shifting natively in the browser.
+            // A rate of 1.28x = ~+4.3 semitones and ~+28% formant shift (making it sound higher-pitched, brighter, and more feminine)
+            source.playbackRate.value = 1.28;
+
+            // 2. Cut the low-end "boominess"
+            const lowShelf = audioContextRef.current.createBiquadFilter();
+            lowShelf.type = "lowshelf";
+            lowShelf.frequency.value = 300; // 300Hz
+            lowShelf.gain.value = -4; // -4dB cut
+
+            // 3. EQ boost at 3-5 kHz as requested
+            const highBoost = audioContextRef.current.createBiquadFilter();
+            highBoost.type = "peaking";
+            highBoost.frequency.value = 4000; // Center of 3-5 kHz range
+            highBoost.Q.value = 0.7; // Wide band
+            highBoost.gain.value = 5; // +5dB boost
+
+            // Connect the chain: Source -> LowShelf -> HighBoost -> Destination
+            source.connect(lowShelf);
+            lowShelf.connect(highBoost);
+            highBoost.connect(audioContextRef.current.destination);
+
             source.onended = () => resolve();
             source.start();
         });
@@ -242,9 +318,11 @@ export const VoiceConsole = () => {
         socketRef.current = null;
         processorRef.current?.disconnect();
         streamRef.current?.getTracks().forEach(track => track.stop());
+        recognitionRef.current?.stop();
         audioContextRef.current?.close();
         audioQueue.current = [];
         isPlaying.current = false;
+        setInterimUserText("");
     };
 
     return (
@@ -260,7 +338,7 @@ export const VoiceConsole = () => {
                             GEMINI 2.0 FLASH
                         </Badge>
                         <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-chart-blue/10 text-chart-blue border-chart-blue/20">
-                            VOICE: KORE (FEMALE)
+                            VOICE: AOEDE (FEMALE)
                         </Badge>
                     </div>
                 </div>
@@ -288,19 +366,64 @@ export const VoiceConsole = () => {
                             <Mic className="w-10 h-10" />
                         </div>
                         <p className="text-base font-medium">Ready for Order Intake</p>
-                        <p className="text-sm mt-1 max-w-[250px]">Connect to simulate a real-time ordering conversation at 0.5x speed.</p>
+                        <p className="text-sm mt-1 max-w-[250px]">Connect to simulate a real-time ordering conversation.</p>
                     </div>
                 ) : (
-                    transcript.map((msg, i) => (
-                        <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
-                            <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-sm shadow-sm ${msg.role === 'user'
-                                ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                                : 'bg-card text-foreground border border-border rounded-tl-sm'
-                                }`}>
-                                {msg.text}
+                    <>
+                        {transcript.map((msg, i) => {
+                            let displayText = msg.text;
+                            if (msg.role === 'assistant') {
+                                // Strip out markdown chunks and thinking phrases after accumulation
+                                displayText = displayText.replace(/\*\*.*?\*\*/gs, '');
+
+                                // Aggressively strip out first-person thought descriptions
+                                const thoughtPatterns = [
+                                    /I'm working on interpreting.*?(?=\n|$)/g,
+                                    /I've determined.*?(?=\n|$)/g,
+                                    /My current plan.*?(?=\n|$)/g,
+                                    /I need to guide.*?(?=\n|$)/g,
+                                    /I think it is an easy.*?(?=\n|$)/g,
+                                    /I'm now formulating.*?(?=\n|$)/g,
+                                    /I was thrown a curveball.*?(?=\n|$)/g,
+                                    /So, I'm pivoting.*?(?=\n|$)/g,
+                                    /I need to get this right before proceeding.*?(?=\n|$)/g,
+                                    /My current approach involves.*?(?=\n|$)/g,
+                                    /I've set the action to.*?(?=\n|$)/g,
+                                    /Similarly, for ".*?", I've mapped.*?(?=\n|$)/g,
+                                    /The next step is to finalize.*?(?=\n|$)/g,
+                                    /I will then confirm with the user.*?(?=\n|$)/g
+                                ];
+
+                                thoughtPatterns.forEach(pattern => {
+                                    displayText = displayText.replace(pattern, '');
+                                });
+
+                                displayText = displayText.trim();
+                                if (!displayText) return null; // Skip rendering if the whole chunk was a thought
+                            }
+
+                            const isUser = msg.role === 'user';
+                            const isAction = msg.role === 'action';
+
+                            return (
+                                <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
+                                    <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-sm shadow-sm ${isUser ? 'bg-primary text-primary-foreground rounded-tr-sm' :
+                                        isAction ? 'bg-muted text-muted-foreground font-mono text-xs border border-border rounded-lg' :
+                                            'bg-card text-foreground border border-border rounded-tl-sm'
+                                        }`}>
+                                        {displayText}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {interimUserText && (
+                            <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2">
+                                <div className="max-w-[85%] rounded-2xl px-5 py-3.5 text-sm shadow-sm bg-primary/70 text-primary-foreground rounded-tr-sm italic">
+                                    {interimUserText}
+                                </div>
                             </div>
-                        </div>
-                    ))
+                        )}
+                    </>
                 )}
             </div>
 
@@ -322,7 +445,7 @@ export const VoiceConsole = () => {
                     </div>
                     {status === 'speaking' && (
                         <Badge className="bg-primary/10 text-primary border-primary/20 animate-pulse">
-                            0.25X SLOW PLAYBACK
+                            NORMAL PLAYBACK SPEED
                         </Badge>
                     )}
                 </div>
