@@ -1,0 +1,16 @@
+item_id,item_name,category,selling_price,food_cost
+M001,Amritsari Paratha,Paratha,265,120
+M002,All In One Paratha,Paratha,285,140
+M003,Paneer Paratha,Paratha,260,130
+M004,Aloo Paratha,Paratha,240,90
+M005,Gobhi Paratha,Paratha,250,100
+M006,Paneer Butter Masala,Sabji,385,210
+M007,Masaledar Sukhe Aloo,Sabji,180,80
+M008,Pindi Chole,Sabji,220,110
+M009,Samosa Chaat,Chaat,210,95
+M010,Papdi Chaat,Chaat,200,90
+M011,Patiala Lassi,Drink,150,60
+M012,Sweet Lassi,Drink,130,55
+M013,Salted Chaas,Drink,70,25
+M014,Gajar Ka Halwa,Dessert,210,100
+M015,Gulab Jamun,Dessert,180,85
