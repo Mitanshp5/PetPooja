@@ -16,6 +16,8 @@ export const VoiceConsole = () => {
     const recognitionRef = useRef<any>(null);
     const audioQueue = useRef<Float32Array[]>([]);
     const isPlaying = useRef(false);
+    const nextStartTimeRef = useRef<number>(0);
+    const effectsChainRef = useRef<{ compressor: DynamicsCompressorNode, lowShelf: BiquadFilterNode, highBoost: BiquadFilterNode } | null>(null);
 
     const startSession = async () => {
         try {
@@ -28,10 +30,34 @@ export const VoiceConsole = () => {
             const { api_key } = await configResp.json();
             if (!api_key) throw new Error("API Key not found on server.");
 
-            // 2. Initialize Audio Context
+            // 2. Initialize Audio Context & Effects
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
-                sampleRate: 16000,
+                sampleRate: 24000,
             });
+
+            const compressor = audioContextRef.current.createDynamicsCompressor();
+            compressor.threshold.value = -24;
+            compressor.knee.value = 30;
+            compressor.ratio.value = 12;
+            compressor.attack.value = 0.003;
+            compressor.release.value = 0.25;
+
+            const lowShelf = audioContextRef.current.createBiquadFilter();
+            lowShelf.type = "lowshelf";
+            lowShelf.frequency.value = 250;
+            lowShelf.gain.value = -3;
+
+            const highBoost = audioContextRef.current.createBiquadFilter();
+            highBoost.type = "peaking";
+            highBoost.frequency.value = 5000;
+            highBoost.Q.value = 0.7;
+            highBoost.gain.value = 4;
+
+            compressor.connect(lowShelf);
+            lowShelf.connect(highBoost);
+            highBoost.connect(audioContextRef.current.destination);
+
+            effectsChainRef.current = { compressor, lowShelf, highBoost };
 
             // 3. Get User Media
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -111,6 +137,17 @@ export const VoiceConsole = () => {
                     setStatus('listening');
                     setIsRecording(true);
 
+                    // WARM START: Force an initial greeting from Gemini
+                    socketRef.current?.send(JSON.stringify({
+                        clientContent: {
+                            turns: [{
+                                role: "user",
+                                parts: [{ text: "Hello! Please greet me now." }]
+                            }],
+                            turnComplete: true
+                        }
+                    }));
+
                     // Start Mic Processing
                     source.connect(processorRef.current!);
                     processorRef.current!.connect(audioContextRef.current!.destination);
@@ -131,7 +168,7 @@ export const VoiceConsole = () => {
                         socketRef.current?.send(JSON.stringify({
                             realtimeInput: {
                                 mediaChunks: [{
-                                    mimeType: "audio/pcm;rate=16000",
+                                    mimeType: "audio/pcm;rate=24000",
                                     data: base64Data
                                 }]
                             }
@@ -263,51 +300,48 @@ export const VoiceConsole = () => {
         isPlaying.current = true;
         setStatus('speaking');
 
-        while (audioQueue.current.length > 0) {
-            const data = audioQueue.current.shift()!;
-            await playAudioChunk(data);
+        while (isPlaying.current) {
+            if (audioQueue.current.length > 0) {
+                const data = audioQueue.current.shift()!;
+                await playAudioChunk(data);
+            } else {
+                // Buffer under-run: Wait for more data
+                await new Promise(r => setTimeout(r, 100));
+                if (audioQueue.current.length === 0) {
+                    isPlaying.current = false;
+                }
+            }
         }
 
-        isPlaying.current = false;
         setStatus('listening');
     };
 
     const playAudioChunk = (data: Float32Array) => {
         return new Promise<void>((resolve) => {
-            if (!audioContextRef.current) return resolve();
+            if (!audioContextRef.current || !effectsChainRef.current) return resolve();
 
-            const buffer = audioContextRef.current.createBuffer(1, data.length, 16000);
+            const buffer = audioContextRef.current.createBuffer(1, data.length, 24000);
             buffer.getChannelData(0).set(data);
             const source = audioContextRef.current.createBufferSource();
             source.buffer = buffer;
+            source.playbackRate.value = 1.0;
+            source.connect(effectsChainRef.current.compressor);
 
-            // --- ANTI-CREEPY AUDIO PROCESSING (Pitch, Formant, EQ) ---
+            const now = audioContextRef.current.currentTime;
+            // 100ms balanced buffer
+            if (nextStartTimeRef.current < now) {
+                nextStartTimeRef.current = now + 0.1;
+            }
 
-            // 1. Pitch & Formant Shift
-            // We use playbackRate to achieve both Pitch and Formant shifting natively in the browser.
-            // A rate of 1.28x = ~+4.3 semitones and ~+28% formant shift (making it sound higher-pitched, brighter, and more feminine)
-            source.playbackRate.value = 1.28;
+            const startTime = nextStartTimeRef.current;
+            source.start(startTime);
 
-            // 2. Cut the low-end "boominess"
-            const lowShelf = audioContextRef.current.createBiquadFilter();
-            lowShelf.type = "lowshelf";
-            lowShelf.frequency.value = 300; // 300Hz
-            lowShelf.gain.value = -4; // -4dB cut
+            const duration = data.length / 24000;
+            nextStartTimeRef.current = startTime + duration;
 
-            // 3. EQ boost at 3-5 kHz as requested
-            const highBoost = audioContextRef.current.createBiquadFilter();
-            highBoost.type = "peaking";
-            highBoost.frequency.value = 4000; // Center of 3-5 kHz range
-            highBoost.Q.value = 0.7; // Wide band
-            highBoost.gain.value = 5; // +5dB boost
-
-            // Connect the chain: Source -> LowShelf -> HighBoost -> Destination
-            source.connect(lowShelf);
-            lowShelf.connect(highBoost);
-            highBoost.connect(audioContextRef.current.destination);
-
-            source.onended = () => resolve();
-            source.start();
+            // Resolve earlier (80ms head start)
+            const delay = (startTime - now + duration) * 1000 - 80;
+            setTimeout(resolve, Math.max(0, delay));
         });
     };
 
