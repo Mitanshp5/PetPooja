@@ -1,17 +1,12 @@
-import StatCards from "@/components/admin/StatCards";
-import RevenueChart from "@/components/admin/RevenueChart";
-import MenuTable from "@/components/admin/MenuTable";
-import ComboSuggestions from "@/components/admin/ComboSuggestions";
-import VoiceCopilotWidget from "@/components/admin/VoiceCopilotWidget";
 import { LayoutDashboard, UtensilsCrossed, BarChart3, Mic, Settings, ChevronRight } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, Outlet } from "react-router-dom";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/admin" },
-  { label: "Menu", icon: UtensilsCrossed, to: "/menu" },
-  { label: "Analytics", icon: BarChart3, to: "/admin#analytics" },
-  { label: "Voice Copilot", icon: Mic, to: "/admin#voice" },
-  { label: "Settings", icon: Settings, to: "/admin#settings" },
+  { label: "Menu", icon: UtensilsCrossed, to: "/admin/menu" },
+  { label: "Analytics", icon: BarChart3, to: "/admin/analytics" },
+  { label: "Voice Copilot", icon: Mic, to: "/admin/voice" },
+  { label: "Settings", icon: Settings, to: "/admin/settings" },
 ];
 
 const AdminDashboard = () => {
@@ -58,28 +53,14 @@ const AdminDashboard = () => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <header className="border-b border-border bg-card px-6 py-4 flex items-center justify-between">
-          <div>
-            <h2 className="font-display font-bold text-xl text-foreground">Revenue Dashboard</h2>
-            <p className="text-sm text-muted-foreground">Menu intelligence & voice copilot overview</p>
-          </div>
+      <main className="flex-1 overflow-auto bg-muted/20">
+        <header className="border-b border-border bg-card px-6 py-4 flex items-center justify-end">
           <div className="flex items-center gap-3">
-            <Link to="/menu" className="text-sm text-muted-foreground hover:text-foreground transition-colors lg:hidden">Menu</Link>
-            <Link to="/kitchen" className="text-sm text-muted-foreground hover:text-foreground transition-colors lg:hidden">Kitchen</Link>
-            <div className="w-9 h-9 rounded-full gradient-warm flex items-center justify-center text-primary-foreground text-sm font-bold">A</div>
+            <div className="w-9 h-9 rounded-full gradient-warm flex items-center justify-center text-primary-foreground text-sm font-bold shadow-sm">A</div>
           </div>
         </header>
-        <div className="p-6 space-y-6 max-w-[1400px]">
-          <StatCards />
-          <RevenueChart />
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div className="xl:col-span-2">
-              <ComboSuggestions />
-            </div>
-            <VoiceCopilotWidget />
-          </div>
-          <MenuTable />
+        <div className="p-6 md:p-8 max-w-[1400px] mx-auto animate-fade-in pb-24">
+          <Outlet />
         </div>
       </main>
     </div>

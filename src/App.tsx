@@ -9,6 +9,11 @@ import MobileMenu from "./pages/MobileMenu";
 import KitchenDisplay from "./pages/KitchenDisplay";
 import NotFound from "./pages/NotFound";
 
+import Overview from "./pages/admin/Overview";
+import MenuIntelligence from "./pages/admin/MenuIntelligence";
+import Analytics from "./pages/admin/Analytics";
+import VoiceCopilot from "./pages/admin/VoiceCopilot";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -19,7 +24,16 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/admin" element={<AdminDashboard />} />
+
+          {/* Admin Nested Routes */}
+          <Route path="/admin" element={<AdminDashboard />}>
+            <Route index element={<Overview />} />
+            <Route path="menu" element={<MenuIntelligence />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="voice" element={<VoiceCopilot />} />
+          </Route>
+
+          {/* Customer Application Routes */}
           <Route path="/menu" element={<MobileMenu />} /> {/* Fallback without table */}
           <Route path="/m/:tableId" element={<MobileMenu />} />
           <Route path="/kitchen" element={<KitchenDisplay />} />

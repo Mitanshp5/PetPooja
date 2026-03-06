@@ -18,3 +18,13 @@ export const getMenuItems = async () => {
     const data = await response.json();
     return data.items;
 };
+
+export const updateMenuItemPrice = async (itemId: string, newPrice: number) => {
+    const response = await fetch(`${API_BASE_URL}/menu-items/${itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selling_price: newPrice }),
+    });
+    if (!response.ok) throw new Error("Failed to update price");
+    return response.json();
+};

@@ -1,4 +1,5 @@
 import { Mic, Phone, Bot } from "lucide-react";
+import { toast } from "sonner";
 
 const VoiceCopilotWidget = () => (
   <div className="bg-card rounded-lg shadow-card border border-border animate-slide-in overflow-hidden">
@@ -34,10 +35,16 @@ const VoiceCopilotWidget = () => (
         <span className="text-sm font-medium text-card-foreground">EN, HI, Hinglish</span>
       </div>
       <div className="grid grid-cols-2 gap-2 pt-2">
-        <button className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border text-sm font-medium text-card-foreground hover:bg-muted transition-colors">
+        <button
+          onClick={() => toast.info("Call Logs Dashboard coming in Phase 6.")}
+          className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border text-sm font-medium text-card-foreground hover:bg-muted transition-colors"
+        >
           <Phone className="w-4 h-4" /> Call Logs
         </button>
-        <button className="flex items-center justify-center gap-2 py-2.5 rounded-lg gradient-warm text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+        <button
+          onClick={() => window.open('/m/test-call', '_blank')}
+          className="flex items-center justify-center gap-2 py-2.5 rounded-lg gradient-warm text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+        >
           <Mic className="w-4 h-4" /> Test Call
         </button>
       </div>

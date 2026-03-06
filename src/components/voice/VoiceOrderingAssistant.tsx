@@ -42,6 +42,15 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
                 setStatus('listening');
                 setIsRecording(true);
 
+                // Trigger the AI's seasonal greeting
+                socketRef.current?.send(JSON.stringify({
+                    client_content: {
+                        turns: [{
+                            parts: [{ text: "Start the conversation with your greeting now." }]
+                        }]
+                    }
+                }));
+
                 source.connect(processorRef.current!);
                 processorRef.current!.connect(audioContextRef.current!.destination);
 
@@ -148,8 +157,8 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
                 <button
                     onClick={isRecording ? stopSession : startSession}
                     className={`w-14 h-14 rounded-full flex items-center justify-center shadow-glow transition-all duration-300 ${isRecording
-                            ? "bg-red-500 animate-pulse scale-110"
-                            : "gradient-warm hover:scale-105"
+                        ? "bg-red-500 animate-pulse scale-110"
+                        : "gradient-warm hover:scale-105"
                         }`}
                 >
                     {status === 'connecting' ? (
