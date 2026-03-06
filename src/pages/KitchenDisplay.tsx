@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { orders as initialOrders, Order } from "@/data/mockData";
+import { Order } from "@/data/mockData";
 import { Clock, ChefHat, CheckCircle2, Truck, UtensilsCrossed, AlertCircle } from "lucide-react";
+import { useActiveOrders, useUpdateOrderStatus } from "@/hooks/useApi";
 
 const statusConfig: Record<Order["status"], { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   new: { label: "NEW", color: "text-chart-red", bg: "bg-chart-red/10 border-chart-red/30", icon: <AlertCircle className="w-4 h-4" /> },
@@ -16,16 +16,16 @@ const typeIcon: Record<Order["type"], React.ReactNode> = {
 };
 
 const KitchenDisplay = () => {
-  const [orderList, setOrderList] = useState(initialOrders);
+  const { data: orderList = [] } = useActiveOrders();
+  const { mutateAsync: updateStatus } = useUpdateOrderStatus();
 
-  const advance = (id: string) => {
-    setOrderList((prev) =>
-      prev.map((o) => {
-        if (o.id !== id) return o;
-        const next: Record<string, Order["status"]> = { new: "preparing", preparing: "ready", ready: "served" };
-        return { ...o, status: next[o.status] || o.status };
-      })
-    );
+  const advance = async (order: any) => {
+    const id = order.id || order._id;
+    const next: Record<string, Order["status"]> = { new: "preparing", preparing: "ready", ready: "served" };
+    const nextStatus = next[order.status];
+    if (nextStatus) {
+      await updateStatus({ orderId: id, status: nextStatus });
+    }
   };
 
   const columns: { status: Order["status"]; title: string }[] = [
@@ -70,7 +70,7 @@ const KitchenDisplay = () => {
               <div className="space-y-3">
                 {colOrders.map((order) => (
                   <div
-                    key={order.id}
+                    key={order.id || order._id || Math.random()}
                     className={`rounded-xl border ${config.bg} p-4 animate-slide-in`}
                   >
                     <div className="flex items-center justify-between mb-3">
@@ -101,7 +101,7 @@ const KitchenDisplay = () => {
                     </ul>
                     {col.status !== "served" && (
                       <button
-                        onClick={() => advance(order.id)}
+                        onClick={() => advance(order)}
                         className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-all ${
                           col.status === "new"
                             ? "gradient-warm text-primary-foreground shadow-glow hover:opacity-90"
