@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { menuItems, categories } from "@/data/mockData";
 import { Search, Leaf, ShoppingCart, Plus, Minus, QrCode } from "lucide-react";
+import VoiceOrderingAssistant from "@/components/voice/VoiceOrderingAssistant";
 import { toast } from "sonner";
 import { usePlaceOrder } from "@/hooks/useApi";
-import VoiceOrderingAssistant from "@/components/voice/VoiceOrderingAssistant";
 
 const MobileMenu = () => {
   const { tableId } = useParams();
@@ -57,7 +57,7 @@ const MobileMenu = () => {
 
   const handleCheckout = async () => {
     if (cartCount === 0) return;
-    
+
     // Map cart items
     const orderItems = Object.entries(cart).map(([id, qty]) => {
       const item = menuItems.find((m) => m.id === id);
@@ -181,7 +181,7 @@ const MobileMenu = () => {
               <span className="text-primary-foreground/80">|</span>
               <span className="font-bold">₹{cartTotal}</span>
             </div>
-            <button 
+            <button
               onClick={handleCheckout}
               className="bg-primary-foreground/20 text-primary-foreground font-semibold px-5 py-2 rounded-xl text-sm hover:bg-primary-foreground/30 transition-colors"
             >
