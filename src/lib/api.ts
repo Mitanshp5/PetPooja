@@ -12,12 +12,22 @@ export const getComboRecommendations = async () => {
     return response.json();
 };
 
-export const getMenuItems = async () => {
-    // In a real app, this would come from the database
-    const response = await fetch(`${API_BASE_URL}/revenue/analysis`);
-    const data = await response.json();
-    return data.items;
+export interface MenuItem {
+    id: string;
+    _id?: string;
+    name: string;
+    description: string;
+    selling_price: number;
+    category: string;
+    veg: boolean;
+}
+
+export const getMenuItems = async (): Promise<MenuItem[]> => {
+    const response = await fetch(`${API_BASE_URL}/menu-items/`);
+    if (!response.ok) throw new Error("Failed to fetch menu items");
+    return response.json();
 };
+
 
 export const updateMenuItemPrice = async (itemId: string, newPrice: number) => {
     const response = await fetch(`${API_BASE_URL}/menu-items/${itemId}`, {
@@ -28,3 +38,10 @@ export const updateMenuItemPrice = async (itemId: string, newPrice: number) => {
     if (!response.ok) throw new Error("Failed to update price");
     return response.json();
 };
+
+export const getRevenueTrends = async () => {
+    const response = await fetch(`${API_BASE_URL}/revenue/trends`);
+    if (!response.ok) throw new Error("Failed to fetch revenue trends");
+    return response.json();
+};
+

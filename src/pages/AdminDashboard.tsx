@@ -15,7 +15,8 @@ const AdminDashboard = () => {
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 gradient-dark border-r border-sidebar-border">
+      <aside className="hidden lg:flex flex-col w-64 gradient-dark border-r border-sidebar-border sticky top-0 h-screen overflow-y-auto">
+
         <div className="p-6">
           <h1 className="font-display font-bold text-xl text-primary-foreground flex items-center gap-2">
             <span className="w-8 h-8 rounded-lg gradient-warm flex items-center justify-center text-sm">🍽</span>

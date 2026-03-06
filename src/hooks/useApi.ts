@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Order } from "../data/mockData";
+import { getMenuItems, MenuItem } from "../lib/api";
 
 const API_BASE = "http://localhost:8000";
 
@@ -19,7 +20,7 @@ export const useActiveOrders = () => {
 // Update order status from Kitchen Display
 export const useUpdateOrderStatus = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: Order["status"] }) => {
       const res = await fetch(`${API_BASE}/kitchen/orders/${orderId}/status`, {
@@ -55,5 +56,12 @@ export const usePlaceOrder = () => {
       // Refresh the kitchen display orders (even though they poll anyway)
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
+  });
+};
+
+export const useMenu = () => {
+  return useQuery<MenuItem[]>({
+    queryKey: ["menu"],
+    queryFn: getMenuItems,
   });
 };
