@@ -44,7 +44,7 @@ export const usePlaceOrder = () => {
 
   return useMutation({
     mutationFn: async (orderPayload: any) => {
-      const res = await fetch(`${API_BASE}/mobile/orders`, {
+      const res = await fetch(`${API_BASE}/menu-items/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderPayload),

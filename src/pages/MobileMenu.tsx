@@ -34,17 +34,25 @@ const MobileMenu = () => {
     return cats;
   }, [menuItems]);
 
-  const handleVoiceCartUpdate = (data: any) => {
+  const handleVoiceCartUpdate = async (data: any) => {
     if (data.function === 'process_order' && data.args.items) {
       setCart((prev) => {
         let newCart = [...prev];
         data.args.items.forEach((item: any) => {
-          // Attempt to find the item ID based on the name from the live data
           const menuItem = menuItems.find(m => m.name.toLowerCase() === item.item_name.toLowerCase());
           if (menuItem) {
             const mId = (menuItem.id || menuItem._id).toString();
+            const mods = item.modifiers || [];
+            const itemNotes = item.notes || "";
+
             if (item.action === 'add') {
-              const existingIndex = newCart.findIndex(c => c.menuItemId === mId && c.modifiers.length === 0 && !c.notes);
+              // Try to find same item with same customizations
+              const existingIndex = newCart.findIndex(c =>
+                c.menuItemId === mId &&
+                JSON.stringify(c.modifiers.sort()) === JSON.stringify(mods.sort()) &&
+                c.notes === itemNotes
+              );
+
               if (existingIndex >= 0) {
                 newCart[existingIndex].qty += item.quantity;
               } else {
@@ -54,8 +62,8 @@ const MobileMenu = () => {
                   name: menuItem.name,
                   price: menuItem.selling_price,
                   qty: item.quantity,
-                  modifiers: [],
-                  notes: ""
+                  modifiers: mods,
+                  notes: itemNotes
                 });
               }
             } else if (item.action === 'remove') {
@@ -76,6 +84,42 @@ const MobileMenu = () => {
         });
         return newCart;
       });
+      toast.success("Cart updated by Voice Assistant");
+    }
+
+    if (data.function === 'place_order') {
+      if (cart.length === 0) {
+        toast.error("Cart is empty. Please add items before placing order.");
+        return;
+      }
+
+      try {
+        const orderPayload = {
+          orderNumber: "", // Backend will generate
+          items: cart.map(c => ({
+            menu_item_id: c.menuItemId,
+            name: c.name,
+            qty: c.qty,
+            modifiers: c.modifiers,
+            notes: c.notes
+          })),
+          status: "new",
+          type: "dine-in",
+          table: tableId || "Unknown",
+          time: new Date().toLocaleTimeString(),
+          elapsed: 0
+        };
+
+        await placeOrder(orderPayload);
+        setCart([]);
+        toast.success("Order placed successfully! Sent to kitchen.", {
+          description: "Your delicious meal is now being prepared.",
+          duration: 5000
+        });
+      } catch (err) {
+        console.error("Order completion failed:", err);
+        toast.error("Failed to place order. Please try again.");
+      }
     }
   };
 
@@ -200,8 +244,8 @@ const MobileMenu = () => {
             <div key={id} className="bg-card rounded-xl p-4 shadow-card border border-border flex items-center gap-4 animate-slide-in">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-4 h-4 rounded border-2 flex items-center justify-center ${item.veg ? "border-chart-green" : "border-chart-red"}`}>
-                    <span className={`w-2 h-2 rounded-full ${item.veg ? "bg-chart-green" : "bg-chart-red"}`} />
+                  <span className="w-4 h-4 rounded border-2 flex items-center justify-center border-chart-green">
+                    <span className="w-2 h-2 rounded-full bg-chart-green" />
                   </span>
                   <h3 className="font-display font-semibold text-card-foreground truncate">{item.name}</h3>
                 </div>

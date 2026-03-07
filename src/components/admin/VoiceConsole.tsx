@@ -7,6 +7,8 @@ export const VoiceConsole = () => {
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'speaking'>('idle');
     const [error, setError] = useState<string | null>(null);
     const [transcript, setTranscript] = useState<{ role: 'user' | 'assistant' | 'action', text: string }[]>([]);
+    const [cart, setCart] = useState<any[]>([]);
+    const [menuData, setMenuData] = useState<any[]>([]);
     const [interimUserText, setInterimUserText] = useState("");
 
     const socketRef = useRef<WebSocket | null>(null);
@@ -16,6 +18,7 @@ export const VoiceConsole = () => {
     const recognitionRef = useRef<any>(null);
     const audioQueue = useRef<Float32Array[]>([]);
     const isPlaying = useRef(false);
+    const isModelTurning = useRef(false);
     const nextStartTimeRef = useRef<number>(0);
     const effectsChainRef = useRef<{ compressor: DynamicsCompressorNode, lowShelf: BiquadFilterNode, highBoost: BiquadFilterNode } | null>(null);
 
@@ -25,14 +28,33 @@ export const VoiceConsole = () => {
             setError(null);
             setTranscript([]);
 
-            // 1. Fetch API Key and Live Menu Items from backend
-            const configResp = await fetch("http://localhost:8000/config/gemini-key");
+            // 1. Fetch Config, Menu, and Combos
+            const [configResp, menuResp, comboResp] = await Promise.all([
+                fetch("http://localhost:8000/config/gemini-key"),
+                fetch("http://localhost:8000/menu-items/"),
+                fetch("http://localhost:8000/revenue/combos")
+            ]);
+
             const { api_key } = await configResp.json();
+            const items = await menuResp.json();
+            const comboData = await comboResp.json();
+
+            setMenuData(items);
+            setCart([]);
+
             if (!api_key) throw new Error("API Key not found on server.");
-            
-            const menuResp = await fetch("http://localhost:8000/menu-items/");
-            const menuData = await menuResp.json();
-            const liveMenuContext = menuData.items?.map((m: any) => m.name).join(", ") || menuData.map((m: any) => m.name).join(", ");
+
+            const menuContext = items.map((item: any) => `${item.name} (${item.category})`).join(", ");
+            const now = new Date();
+            const hour = now.getHours();
+            const comboContext = comboData.recommendations.map((c: any) =>
+                `${c.is_promoted ? "[PRIORITY SPECIAL]: " : ""}If they order ${c.primary_item_name}, recommend ${c.recommended_item_name}`
+            ).join(". ");
+
+            let timeContext = "It's breakfast time, suggest light snacks.";
+            if (hour >= 12 && hour < 16) timeContext = "It's lunch time, suggest hearty meals like Amritsari Paratha and Dal Makhani.";
+            else if (hour >= 16 && hour < 20) timeContext = "It's a warm evening, suggest cold beverages like Sweet Lassi or Gulab Jamun for dessert.";
+            else if (hour >= 20) timeContext = "It's dinner time, suggest our signature Thalis.";
 
             // 2. Initialize Audio Context & Effects
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
@@ -64,14 +86,14 @@ export const VoiceConsole = () => {
             effectsChainRef.current = { compressor, lowShelf, highBoost };
 
             // 3. Get User Media with strict Echo Cancellation
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
             });
             streamRef.current = stream;
             const source = audioContextRef.current.createMediaStreamSource(stream);
 
-            // 4. Create Processor for 16kHz PCM
-            processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+            // 4. Create Processor for 24kHz PCM (Reduced buffer for lower latency)
+            processorRef.current = audioContextRef.current.createScriptProcessor(2048, 1, 1);
 
             // 5. Setup WebSocket directly to Google
             const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${api_key}`;
@@ -95,37 +117,53 @@ export const VoiceConsole = () => {
                         },
                         systemInstruction: {
                             parts: [{
-                                text: `CRITICAL DIRECTIVE: You are PetPooja's voice ordering assistant.
-1. NEVER THINK OUT LOUD. NEVER explain what you are doing. NEVER output your internal thoughts or plans.
-2. ONLY output the FINAL WORDS you want the customer to hear. 
-3. YOUR VERY FIRST RESPONSE MUST BE EXACTLY: 'Namaste! PetPooja mein aapka swagat hai. Main aapki kaise sahayata kar sakti hoon?'
-4. ALWAYS use the 'process_order' tool immediately when users order.
-5. Menu Context: ${liveMenuContext}.`
+                                text: `You are PetPooja's expert FEMALE voice waiter (Main female hoon). 
+CRITICAL: ALWAYS use female gendered speech in Hindi/Hinglish (e.g., use 'karti hoon', 'sakti hoon', 'hoon' instead of 'karta hu', 'sakta hu').
+DO NOT OUTPUT ANY TEXT. ONLY OUTPUT AUDIO. NEVER EXPLAIN YOUR ACTIONS IN TEXT.
+BE EXTREMELY CONCISE. Minimize filler words. Don't speak more than necessary. 
+1. Speak SLOWLY, POLITELY and CALMLY in a professional Indian accent.
+2. MENU KNOWLEDGE: You ONLY sell these items: ${menuContext}. Efficiently handle off-menu requests.
+3. CONTEXTUAL UPSLELLING: ${timeContext} ${comboContext}. Items marked as [PRIORITY SPECIAL] are highly recommended for upselling. Be brief with suggestions.
+4. HYDRATION: ONLY when the customer is ready to confirm the final order, check if we have already added a 'Water Bottle' or 'Bisleri'. If we have NOT ordered water, briefly say 'Kya main aapke liye paani ki ek bottle add kar doon?' before summarizing for 'place_order'.
+5. SPECIAL REQUESTS: Quickly ask for 'Spicy', 'Jain', 'Less Oily', or comments for each item.
+6. TOOL USAGE: 
+   - Use 'process_order' for item updates.
+   - Use 'place_order' ONLY when the user explicitly confirms the final summary.
+7. YOUR FIRST RESPONSE MUST BE: 'Namaste! PetPooja mein aapka swagat hai. Main aapki kaise sahayata kar sakti hoon?'`
                             }]
                         },
                         tools: [{
-                            functionDeclarations: [{
-                                name: "process_order",
-                                description: "Updates the customer's shopping cart.",
-                                parameters: {
-                                    type: "OBJECT",
-                                    properties: {
-                                        items: {
-                                            type: "ARRAY",
+                            functionDeclarations: [
+                                {
+                                    name: "process_order",
+                                    description: "Updates the customer's shopping cart with items and special instructions.",
+                                    parameters: {
+                                        type: "OBJECT",
+                                        properties: {
                                             items: {
-                                                type: "OBJECT",
-                                                properties: {
-                                                    action: { type: "STRING" },
-                                                    item_name: { type: "STRING" },
-                                                    quantity: { type: "INTEGER" }
-                                                },
-                                                required: ["action", "item_name", "quantity"]
+                                                type: "ARRAY",
+                                                items: {
+                                                    type: "OBJECT",
+                                                    properties: {
+                                                        action: { type: "STRING", enum: ["add", "remove"] },
+                                                        item_name: { type: "STRING" },
+                                                        quantity: { type: "INTEGER" },
+                                                        modifiers: { type: "ARRAY", items: { type: "STRING" }, description: "e.g., Spicy, Jain, Less Oily" },
+                                                        notes: { type: "STRING", description: "Any other special comments" }
+                                                    },
+                                                    required: ["action", "item_name", "quantity"]
+                                                }
                                             }
-                                        }
-                                    },
-                                    required: ["items"]
+                                        },
+                                        required: ["items"]
+                                    }
+                                },
+                                {
+                                    name: "place_order",
+                                    description: "Finalizes the order and sends it to the kitchen.",
+                                    parameters: { type: "OBJECT", properties: {} }
                                 }
-                            }]
+                            ]
                         }]
                     }
                 };
@@ -157,13 +195,13 @@ export const VoiceConsole = () => {
 
                     // Start Mic Processing
                     source.connect(processorRef.current!);
-                    
+
                     // Route to a silent gain node to prevent speaker feedback loop
                     const silentNode = audioContextRef.current!.createGain();
                     silentNode.gain.value = 0;
                     processorRef.current!.connect(silentNode);
                     silentNode.connect(audioContextRef.current!.destination);
-                    
+
                     processorRef.current!.onaudioprocess = (e) => {
                         const inputData = e.inputBuffer.getChannelData(0);
                         const int16Data = new Int16Array(inputData.length);
@@ -215,12 +253,19 @@ export const VoiceConsole = () => {
                         recognitionRef.current.start();
                     }
 
-                    // Skip the second duplicate trigger here as WARM START handled it
+                    // Start Mic Processing
                 }
 
                 if (data.serverContent) {
                     const modelTurn = data.serverContent.modelTurn;
                     if (modelTurn) {
+                        // Turn awareness: Use explicit flag
+                        if (modelTurn.hasOwnProperty('turnComplete')) {
+                            isModelTurning.current = !modelTurn.turnComplete;
+                        } else {
+                            isModelTurning.current = true;
+                        }
+
                         for (const part of modelTurn.parts) {
                             if (part.inlineData) {
                                 // Add audio to queue
@@ -239,6 +284,7 @@ export const VoiceConsole = () => {
                                 processAudioQueue();
                             }
                             if (part.text) {
+                                // Show text immediately (though we directive-forbid it, it's good for debugging/fallback)
                                 setTranscript(prev => {
                                     const newPrev = [...prev];
                                     const last = newPrev[newPrev.length - 1];
@@ -270,8 +316,101 @@ export const VoiceConsole = () => {
                             return [...prev, { role: 'action', text: actionStr }];
                         });
 
-                        // We would call backend here if this were real, but this is a UI demo
-                        // Send dummy response back to Gemini to keep it happy
+                        // HANDLE ACTUAL CART UPDATES
+                        if (call.name === "process_order" && call.args.items) {
+                            setCart(prev => {
+                                let newCart = [...prev];
+                                call.args.items.forEach((item: any) => {
+                                    const menuItem = items.find((m: any) => m.name.toLowerCase() === item.item_name.toLowerCase());
+                                    if (menuItem) {
+                                        const mods = item.modifiers || [];
+                                        const notes = item.notes || "";
+                                        const mId = (menuItem.id || menuItem._id).toString();
+
+                                        if (item.action === 'add') {
+                                            const existingIndex = newCart.findIndex(c =>
+                                                c.menuItemId === mId &&
+                                                JSON.stringify(c.modifiers.sort()) === JSON.stringify(mods.sort()) &&
+                                                c.notes === notes
+                                            );
+                                            if (existingIndex >= 0) {
+                                                newCart[existingIndex].qty += item.quantity;
+                                            } else {
+                                                newCart.push({
+                                                    menuItemId: mId,
+                                                    name: menuItem.name,
+                                                    qty: item.quantity,
+                                                    modifiers: mods,
+                                                    notes: notes
+                                                });
+                                            }
+                                        } else if (item.action === 'remove') {
+                                            let qtyToRemove = item.quantity;
+                                            for (let i = newCart.length - 1; i >= 0 && qtyToRemove > 0; i--) {
+                                                if (newCart[i].menuItemId === mId) {
+                                                    if (newCart[i].qty > qtyToRemove) {
+                                                        newCart[i].qty -= qtyToRemove;
+                                                        qtyToRemove = 0;
+                                                    } else {
+                                                        qtyToRemove -= newCart[i].qty;
+                                                        newCart.splice(i, 1);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                                return newCart;
+                            });
+                        }
+
+                        if (call.name === "place_order") {
+                            // Effectively submit the order to KDS backend
+                            (async () => {
+                                try {
+                                    // We'll get the latest cart from state
+                                    const latestCart = await new Promise<any[]>(resolve => {
+                                        setCart(current => {
+                                            resolve(current);
+                                            return current;
+                                        });
+                                    });
+
+                                    if (latestCart.length === 0) return;
+
+                                    const orderPayload = {
+                                        orderNumber: "",
+                                        items: latestCart.map(c => ({
+                                            menu_item_id: c.menuItemId,
+                                            name: c.name,
+                                            qty: c.qty,
+                                            modifiers: c.modifiers,
+                                            notes: c.notes
+                                        })),
+                                        status: "new",
+                                        type: "dine-in",
+                                        table: "Admin Dashboard",
+                                        time: new Date().toLocaleTimeString(),
+                                        elapsed: 0
+                                    };
+
+                                    const response = await fetch("http://localhost:8000/menu-items/orders", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify(orderPayload)
+                                    });
+
+                                    if (response.ok) {
+                                        console.log("Admin Voice Order submitted to KDS successfully.");
+                                        setCart([]);
+                                    }
+                                } catch (err) {
+                                    console.error("KDS Submission error:", err);
+                                }
+                            })();
+                        }
+
+                        // Send tool response to Gemini
                         socketRef.current?.send(JSON.stringify({
                             toolResponse: {
                                 functionResponses: [{
@@ -312,9 +451,14 @@ export const VoiceConsole = () => {
                 const data = audioQueue.current.shift()!;
                 await playAudioChunk(data);
             } else {
-                // Buffer under-run: Wait for more data
-                await new Promise(r => setTimeout(r, 100));
-                if (audioQueue.current.length === 0) {
+                // Wait for more data IF model is still turning (Gaps up to 1500ms)
+                let waitTime = 0;
+                while (audioQueue.current.length === 0 && isModelTurning.current && waitTime < 1500) {
+                    await new Promise(r => setTimeout(r, 50));
+                    waitTime += 50;
+                }
+
+                if (audioQueue.current.length === 0 && (!isModelTurning.current || waitTime >= 1500)) {
                     isPlaying.current = false;
                 }
             }
@@ -374,14 +518,6 @@ export const VoiceConsole = () => {
                         <MessageSquare className="w-5 h-5 text-primary" />
                         AI Voice Ordering (Direct Connect)
                     </h3>
-                    <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-chart-green/10 text-chart-green border-chart-green/20">
-                            GEMINI 2.0 FLASH
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-chart-blue/10 text-chart-blue border-chart-blue/20">
-                            VOICE: AOEDE (FEMALE)
-                        </Badge>
-                    </div>
                 </div>
                 <button
                     onClick={isRecording ? stopSession : startSession}

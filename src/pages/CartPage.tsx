@@ -10,7 +10,7 @@ const CartPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { mutateAsync: placeOrder } = usePlaceOrder();
-  
+
   const [cart, setCart] = useState<CartItem[]>(location.state?.cart || []);
   const tableId = location.state?.tableId || null;
 
@@ -32,7 +32,7 @@ const CartPage = () => {
 
   const handlePlaceOrder = async () => {
     if (cartCount === 0) return;
-    
+
     const orderItems = cart.map((item) => ({
       menu_item_id: item.menuItemId,
       name: item.name,
@@ -66,7 +66,7 @@ const CartPage = () => {
         <Receipt className="w-16 h-16 text-muted-foreground opacity-50 mb-4" />
         <h2 className="text-xl font-bold mb-2">Your cart is empty</h2>
         <p className="text-muted-foreground mb-6">Looks like you haven't added anything to your cart yet.</p>
-        <button 
+        <button
           onClick={() => navigate(tableId ? `/m/${tableId}` : "/menu")}
           className="bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-xl w-full"
         >
@@ -80,7 +80,7 @@ const CartPage = () => {
     <div className="min-h-screen bg-background max-w-md mx-auto relative pb-28">
       {/* Header */}
       <div className="gradient-warm px-5 pt-8 pb-6 rounded-b-3xl flex items-center gap-4">
-        <button 
+        <button
           onClick={() => navigate(tableId ? `/m/${tableId}` : "/menu", { state: { cart: cart } })}
           className="w-10 h-10 rounded-xl bg-primary-foreground/20 flex items-center justify-center text-primary-foreground hover:bg-primary-foreground/30 transition-colors"
         >
@@ -97,18 +97,18 @@ const CartPage = () => {
       {/* Cart Items */}
       <div className="px-5 py-6 space-y-4">
         <h2 className="font-semibold text-lg border-b pb-2">Order Summary</h2>
-        
+
         {cart.map((cartItem) => {
           const item = menuItems.find((m) => m.id === cartItem.menuItemId);
           if (!item) return null;
-          
+
           return (
             <div key={cartItem.id} className="flex flex-col gap-2 py-3 border-b border-border/50 last:border-0 hover:bg-muted/50 transition-colors p-2 rounded-xl -mx-2">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={`w-3 h-3 rounded border flex items-center justify-center ${item.veg ? "border-chart-green" : "border-chart-red"}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${item.veg ? "bg-chart-green" : "bg-chart-red"}`} />
+                    <span className="w-3 h-3 rounded border flex items-center justify-center border-chart-green">
+                      <span className="w-1.5 h-1.5 rounded-full bg-chart-green" />
                     </span>
                     <h3 className="font-display font-medium text-foreground truncate text-base">{cartItem.name}</h3>
                   </div>
@@ -130,7 +130,7 @@ const CartPage = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex flex-col items-end gap-2 pt-1">
                   <div className="flex items-center gap-3 bg-primary/10 rounded-lg px-2 py-1 shadow-inner">
                     <button onClick={() => removeFromCart(cartItem.id)} className="w-6 h-6 flex items-center justify-center text-primary hover:bg-primary/20 rounded-md transition-colors">
@@ -170,7 +170,7 @@ const CartPage = () => {
 
       {/* Cart Bar */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-5 pb-5 mt-auto">
-        <button 
+        <button
           onClick={handlePlaceOrder}
           className="w-full gradient-warm text-primary-foreground font-bold px-5 py-4 rounded-xl shadow-elevated hover:opacity-95 transition-all flex justify-between items-center"
         >

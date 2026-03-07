@@ -16,6 +16,7 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
     const streamRef = useRef<MediaStream | null>(null);
     const audioQueue = useRef<Float32Array[]>([]);
     const isPlaying = useRef(false);
+    const isModelTurning = useRef(false);
     const nextStartTimeRef = useRef<number>(0);
     const effectsChainRef = useRef<{ compressor: DynamicsCompressorNode, lowShelf: BiquadFilterNode, highBoost: BiquadFilterNode } | null>(null);
 
@@ -24,14 +25,30 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
             setStatus('connecting');
             setError(null);
 
-            // 1. Fetch API Key and live Menu context
-            const configResp = await fetch("http://localhost:8000/config/gemini-key");
+            // 1. Fetch Config, Menu, and Combos
+            const [configResp, menuResp, comboResp] = await Promise.all([
+                fetch("http://localhost:8000/config/gemini-key"),
+                fetch("http://localhost:8000/menu-items/"),
+                fetch("http://localhost:8000/revenue/combos")
+            ]);
+
             const { api_key } = await configResp.json();
+            const menuItems = await menuResp.json();
+            const comboData = await comboResp.json();
+
             if (!api_key) throw new Error("API Key not found on server.");
 
-            const menuResp = await fetch("http://localhost:8000/menu-items/");
-            const menuData = await menuResp.json();
-            const liveMenuContext = menuData.items?.map((m: any) => m.name).join(", ") || menuData.map((m: any) => m.name).join(", ");
+            const menuContext = menuItems.map((item: any) => `${item.name} (${item.category})`).join(", ");
+            const comboContext = comboData.recommendations.map((c: any) =>
+                `${c.is_promoted ? "[PRIORITY SPECIAL]: " : ""}If they order ${c.primary_item_name}, recommend ${c.recommended_item_name}`
+            ).join(". ");
+
+            const now = new Date();
+            const hour = now.getHours();
+            let timeContext = "It's breakfast time, suggest light snacks.";
+            if (hour >= 12 && hour < 16) timeContext = "It's lunch time, suggest hearty meals like Amritsari Paratha and Dal Makhani.";
+            else if (hour >= 16 && hour < 20) timeContext = "It's a warm evening, suggest cold beverages like Sweet Lassi or Gulab Jamun for dessert.";
+            else if (hour >= 20) timeContext = "It's dinner time, suggest our signature Thalis.";
 
             // 2. Initialize Audio Context & Effects Chain
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
@@ -68,8 +85,8 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
             streamRef.current = stream;
             const source = audioContextRef.current.createMediaStreamSource(stream);
 
-            // 4. Create Processor for 16kHz PCM
-            processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+            // 4. Create Processor for 24kHz PCM (Reduced buffer for lower latency)
+            processorRef.current = audioContextRef.current.createScriptProcessor(2048, 1, 1);
 
             // 5. Setup WebSocket directly to Google
             const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${api_key}`;
@@ -78,49 +95,60 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
             socketRef.current.onopen = () => {
                 const setupMessage = {
                     setup: {
-                        model: "models/gemini-2.5-flash-native-audio-latest", // Using latest native audio model
+                        model: "models/gemini-2.5-flash-native-audio-latest",
                         generationConfig: {
                             responseModalities: ["AUDIO"],
-                            speechConfig: {
-                                voiceConfig: {
-                                    prebuiltVoiceConfig: {
-                                        voiceName: "Aoede" // Female Voice
-                                    }
-                                }
-                            }
+                            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } } }
                         },
                         systemInstruction: {
                             parts: [{
-                                text: `You are PetPooja's voice ordering assistant. 
-1. Speak SLOWLY and CALMLY. 
-2. Use the 'process_order' tool whenever a user wants to add/remove items.
-3. Your FIRST response must be: 'Namaste! PetPooja mein aapka swagat hai. Main aapki kaise sahayata kar sakti hoon?'
-4. Menu Context: ${liveMenuContext}.`
+                                text: `You are PetPooja's expert FEMALE voice waiter (Main female hoon). 
+CRITICAL: ALWAYS use female gendered speech in Hindi/Hinglish (e.g., use 'karti hoon', 'sakti hoon', 'hoon' instead of 'karta hu', 'sakta hu').
+DO NOT OUTPUT ANY TEXT. ONLY OUTPUT AUDIO. NEVER EXPLAIN YOUR ACTIONS IN TEXT.
+BE EXTREMELY CONCISE. Minimize filler words. Don't speak more than necessary. 
+1. Speak SLOWLY, POLITELY and CALMLY in a professional Indian accent.
+2. MENU KNOWLEDGE: You ONLY sell these items: ${menuContext}. Efficiently handle off-menu requests.
+3. CONTEXTUAL UPSLELLING: ${timeContext} ${comboContext}. Items marked as [PRIORITY SPECIAL] are highly recommended for upselling. Be brief with suggestions.
+4. HYDRATION: ONLY when the customer is ready to confirm the final order, check if they have already added a 'Water Bottle' or 'Bisleri'. If they have NOT ordered water, briefly say 'Kya main aapke liye paani ki ek bottle add kar doon?' before summarizing for 'place_order'.
+5. SPECIAL REQUESTS: Quickly ask for 'Spicy', 'Jain', 'Less Oily', or comments for each item.
+6. TOOL USAGE: 
+   - Use 'process_order' for item updates.
+   - Use 'place_order' ONLY when the user explicitly confirms the final summary.
+7. YOUR FIRST RESPONSE MUST BE: 'Namaste! PetPooja mein aapka swagat hai. Main aapki kaise sahayata kar sakti hoon?'`
                             }]
                         },
                         tools: [{
-                            functionDeclarations: [{
-                                name: "process_order",
-                                description: "Updates the customer's shopping cart.",
-                                parameters: {
-                                    type: "OBJECT",
-                                    properties: {
-                                        items: {
-                                            type: "ARRAY",
+                            functionDeclarations: [
+                                {
+                                    name: "process_order",
+                                    description: "Updates the customer's shopping cart with items and special instructions.",
+                                    parameters: {
+                                        type: "OBJECT",
+                                        properties: {
                                             items: {
-                                                type: "OBJECT",
-                                                properties: {
-                                                    action: { type: "STRING", enum: ["add", "remove"] },
-                                                    item_name: { type: "STRING" },
-                                                    quantity: { type: "INTEGER" }
-                                                },
-                                                required: ["action", "item_name", "quantity"]
+                                                type: "ARRAY",
+                                                items: {
+                                                    type: "OBJECT",
+                                                    properties: {
+                                                        action: { type: "STRING", enum: ["add", "remove"] },
+                                                        item_name: { type: "STRING" },
+                                                        quantity: { type: "INTEGER" },
+                                                        modifiers: { type: "ARRAY", items: { type: "STRING" }, description: "e.g., Spicy, Jain, Less Oily" },
+                                                        notes: { type: "STRING", description: "Any other special comments" }
+                                                    },
+                                                    required: ["action", "item_name", "quantity"]
+                                                }
                                             }
-                                        }
-                                    },
-                                    required: ["items"]
+                                        },
+                                        required: ["items"]
+                                    }
+                                },
+                                {
+                                    name: "place_order",
+                                    description: "Finalizes the order and sends it to the kitchen.",
+                                    parameters: { type: "OBJECT", properties: {} }
                                 }
-                            }]
+                            ]
                         }]
                     }
                 };
@@ -190,6 +218,13 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
                 }
 
                 if (data.serverContent?.modelTurn) {
+                    // Turn awareness: Use the explicit turnComplete flag if present
+                    if (data.serverContent.modelTurn.hasOwnProperty('turnComplete')) {
+                        isModelTurning.current = !data.serverContent.modelTurn.turnComplete;
+                    } else {
+                        isModelTurning.current = true; // Assume turning if we received any model content without complete flag
+                    }
+
                     for (const part of data.serverContent.modelTurn.parts) {
                         if (part.inlineData) {
                             const base64Audio = part.inlineData.data;
@@ -211,16 +246,34 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
 
                 if (data.toolCall) {
                     for (const call of data.toolCall.functionCalls) {
-                        onCartUpdate({ function: call.name, args: call.args });
-                        socketRef.current?.send(JSON.stringify({
-                            toolResponse: {
-                                functionResponses: [{
-                                    name: call.name,
-                                    response: { success: true },
-                                    id: call.id
-                                }]
-                            }
-                        }));
+                        const callId = call.id;
+                        const functionName = call.name;
+
+                        if (functionName === "process_order") {
+                            onCartUpdate({ function: "process_order", args: call.args });
+                            socketRef.current?.send(JSON.stringify({
+                                toolResponse: {
+                                    functionResponses: [{
+                                        name: functionName,
+                                        response: { success: true },
+                                        id: callId
+                                    }]
+                                }
+                            }));
+                        } else if (functionName === "place_order") {
+                            // Fetch current cart state (this would normally come from a prop or context)
+                            // For this demo, we'll assume the AI has the summary and we trigger the submission
+                            onCartUpdate({ function: "place_order", args: {} });
+                            socketRef.current?.send(JSON.stringify({
+                                toolResponse: {
+                                    functionResponses: [{
+                                        name: functionName,
+                                        response: { success: true, message: "Order sent to kitchen!" },
+                                        id: callId
+                                    }]
+                                }
+                            }));
+                        }
                     }
                 }
             };
@@ -251,9 +304,14 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
                 const data = audioQueue.current.shift()!;
                 await playAudioChunk(data);
             } else {
-                // Buffer under-run: Wait up to 100ms for more data before closing the loop
-                await new Promise(r => setTimeout(r, 100));
-                if (audioQueue.current.length === 0) {
+                // Network/Processing gap: Wait up to 1500ms for more data IF model is still turning
+                let waitTime = 0;
+                while (audioQueue.current.length === 0 && isModelTurning.current && waitTime < 1500) {
+                    await new Promise(r => setTimeout(r, 50));
+                    waitTime += 50;
+                }
+
+                if (audioQueue.current.length === 0 && (!isModelTurning.current || waitTime >= 1500)) {
                     isPlaying.current = false;
                 }
             }

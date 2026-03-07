@@ -45,3 +45,17 @@ export const getRevenueTrends = async () => {
     return response.json();
 };
 
+export const promoteCombo = async (primaryItemId: string, recommendedItemId: string, isPromoted: boolean) => {
+    const response = await fetch(`${API_BASE_URL}/revenue/combos/promote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            primary_item_id: primaryItemId,
+            recommended_item_id: recommendedItemId,
+            is_promoted: isPromoted
+        }),
+    });
+    if (!response.ok) throw new Error("Failed to promote combo");
+    return response.json();
+};
+
