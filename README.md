@@ -1,73 +1,69 @@
-# Welcome to your Lovable project
+# PetPooja - Next-Gen Restaurant Management System
 
-## Project info
+PetPooja is a comprehensive restaurant operating system featuring AI-driven voice ordering, real-time kitchen display (KDS), and revenue intelligence analytics.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## 🚀 Key Features
 
-## How can I edit this code?
+- **AI Voice Ordering**: Powered by **Gemini 2.5 Flash**, offering a natural, multi-modal voice ordering experience for both customers and staff.
+- **Kitchen Display System (KDS)**: Real-time order tracking and status updates (New -> Preparing -> Ready -> Served).
+- **Revenue Intelligence**: Automated menu engineering using BCG Matrix classification (Star, Plowhorse, Puzzle, Dog) based on historical sales data.
+- **Smart Combo Recommendations**: Market Basket Analysis to suggest high-conversion item pairings.
+- **Mobile-First Experience**: Responsive digital menu for seamless tableside ordering.
 
-There are several ways of editing your application.
+## 🛠️ Tech Stack
 
-**Use Lovable**
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, Shadcn/UI, Lucide Icons.
+- **Backend**: FastAPI (Python), Motor (Async MongoDB), Pydantic.
+- **Database**: MongoDB (Atlas).
+- **AI**: Google Gemini Pro & Flash (Vertex AI / Google AI SDK).
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## ⚙️ Setup Instructions
 
-Changes made via Lovable will be committed automatically to this repo.
+### Backend (FastAPI)
 
-**Use your preferred IDE**
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Create a `.env` file in the `backend` folder:
+   ```env
+   MONGODB_URL=your_mongodb_atlas_url
+   DATABASE_NAME=petpooja_db
+   GEMINI_API_KEY=your_google_ai_api_key
+   ```
+5. Run the server:
+   ```bash
+   uvicorn main:app --port 8000 --reload
+   ```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Frontend (Vite)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. From the root directory, install dependencies:
+   ```bash
+   npm install
+   ```
+2. Run the development server:
+   ```bash
+   npm run dev
+   ```
+3. The app will be available at `http://localhost:8080`.
 
-Follow these steps:
+## 📁 Project Structure
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+- `backend/`: FastAPI application, database logic, and AI services.
+- `src/`: React frontend with pages for Menu, KDS, and Admin Analytics.
+- `src/components/voice/`: Core logic for the AI Voice Assistant.
+- `src/hooks/`: Custom React Query hooks for API interaction.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## 📄 License
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+This project is licensed under the MIT License.
