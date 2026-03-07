@@ -102,13 +102,12 @@ const KitchenDisplay = () => {
                     {col.status !== "served" && (
                       <button
                         onClick={() => advance(order)}
-                        className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                          col.status === "new"
+                        className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-all ${col.status === "new"
                             ? "gradient-warm text-primary-foreground shadow-glow hover:opacity-90"
                             : "bg-chart-green/20 text-chart-green border border-chart-green/30 hover:bg-chart-green/30"
-                        }`}
+                          }`}
                       >
-                        {col.status === "new" ? "Start Preparing →" : "Mark Ready ✓"}
+                        {col.status === "new" ? "Start Preparing →" : col.status === "preparing" ? "Mark Ready ✓" : "Serve Order ✓"}
                       </button>
                     )}
                   </div>

@@ -518,14 +518,6 @@ BE EXTREMELY CONCISE. Minimize filler words. Don't speak more than necessary.
                         <MessageSquare className="w-5 h-5 text-primary" />
                         AI Voice Ordering (Direct Connect)
                     </h3>
-                    <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-chart-green/10 text-chart-green border-chart-green/20">
-                            GEMINI 2.0 FLASH
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-chart-blue/10 text-chart-blue border-chart-blue/20">
-                            VOICE: AOEDE (FEMALE)
-                        </Badge>
-                    </div>
                 </div>
                 <button
                     onClick={isRecording ? stopSession : startSession}

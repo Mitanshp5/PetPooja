@@ -244,8 +244,8 @@ const MobileMenu = () => {
             <div key={id} className="bg-card rounded-xl p-4 shadow-card border border-border flex items-center gap-4 animate-slide-in">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-4 h-4 rounded border-2 flex items-center justify-center ${item.veg ? "border-chart-green" : "border-chart-red"}`}>
-                    <span className={`w-2 h-2 rounded-full ${item.veg ? "bg-chart-green" : "bg-chart-red"}`} />
+                  <span className="w-4 h-4 rounded border-2 flex items-center justify-center border-chart-green">
+                    <span className="w-2 h-2 rounded-full bg-chart-green" />
                   </span>
                   <h3 className="font-display font-semibold text-card-foreground truncate">{item.name}</h3>
                 </div>
