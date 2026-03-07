@@ -1,5 +1,4 @@
-import { useLocation, useNavigate } from "react-router-dom";
-import { menuItems } from "@/data/mockData";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Plus, Minus, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { usePlaceOrder } from "@/hooks/useApi";
@@ -9,10 +8,11 @@ import { CartItem } from "./MobileMenu";
 const CartPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { tableId: paramTableId } = useParams();
   const { mutateAsync: placeOrder } = usePlaceOrder();
 
   const [cart, setCart] = useState<CartItem[]>(location.state?.cart || []);
-  const tableId = location.state?.tableId || null;
+  const tableId = paramTableId || location.state?.tableId || null;
 
   const cartCount = cart.reduce((total, item) => total + item.qty, 0);
   const cartTotal = cart.reduce((total, item) => total + (item.price * item.qty), 0);
@@ -42,7 +42,7 @@ const CartPage = () => {
     }));
 
     const payload = {
-      orderNumber: `KOT-${Math.floor(100 + Math.random() * 900)}`,
+      orderNumber: "", // Backend will generate
       items: orderItems,
       status: "new",
       type: "dine-in",
@@ -99,9 +99,6 @@ const CartPage = () => {
         <h2 className="font-semibold text-lg border-b pb-2">Order Summary</h2>
 
         {cart.map((cartItem) => {
-          const item = menuItems.find((m) => m.id === cartItem.menuItemId);
-          if (!item) return null;
-
           return (
             <div key={cartItem.id} className="flex flex-col gap-2 py-3 border-b border-border/50 last:border-0 hover:bg-muted/50 transition-colors p-2 rounded-xl -mx-2">
               <div className="flex items-start justify-between gap-4">

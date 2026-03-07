@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Search, Leaf, ShoppingCart, Plus, Minus, QrCode, Loader2, X } from "lucide-react";
 import VoiceOrderingAssistant from "@/components/voice/VoiceOrderingAssistant";
@@ -23,6 +23,12 @@ const MobileMenu = () => {
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const cartRef = useRef<CartItem[]>([]);
+
+  // Sync ref with state for access in callbacks
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
 
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [modifiers, setModifiers] = useState<string[]>([]);
@@ -54,7 +60,10 @@ const MobileMenu = () => {
               );
 
               if (existingIndex >= 0) {
-                newCart[existingIndex].qty += item.quantity;
+                newCart[existingIndex] = {
+                  ...newCart[existingIndex],
+                  qty: newCart[existingIndex].qty + item.quantity
+                };
               } else {
                 newCart.push({
                   id: Date.now().toString() + Math.random().toString(),
@@ -71,7 +80,7 @@ const MobileMenu = () => {
               for (let i = newCart.length - 1; i >= 0 && qtyToRemove > 0; i--) {
                 if (newCart[i].menuItemId === mId) {
                   if (newCart[i].qty > qtyToRemove) {
-                    newCart[i].qty -= qtyToRemove;
+                    newCart[i] = { ...newCart[i], qty: newCart[i].qty - qtyToRemove };
                     qtyToRemove = 0;
                   } else {
                     qtyToRemove -= newCart[i].qty;
@@ -82,13 +91,15 @@ const MobileMenu = () => {
             }
           }
         });
+        cartRef.current = newCart; // TRICK: Sync ref immediately for subsequent tool calls
         return newCart;
       });
       toast.success("Cart updated by Voice Assistant");
     }
 
     if (data.function === 'place_order') {
-      if (cart.length === 0) {
+      const currentCart = cartRef.current;
+      if (currentCart.length === 0) {
         toast.error("Cart is empty. Please add items before placing order.");
         return;
       }
@@ -96,7 +107,7 @@ const MobileMenu = () => {
       try {
         const orderPayload = {
           orderNumber: "", // Backend will generate
-          items: cart.map(c => ({
+          items: currentCart.map(c => ({
             menu_item_id: c.menuItemId,
             name: c.name,
             qty: c.qty,
@@ -112,6 +123,7 @@ const MobileMenu = () => {
 
         await placeOrder(orderPayload);
         setCart([]);
+        cartRef.current = []; // Also clear the ref
         toast.success("Order placed successfully! Sent to kitchen.", {
           description: "Your delicious meal is now being prepared.",
           duration: 5000
@@ -122,7 +134,6 @@ const MobileMenu = () => {
       }
     }
   };
-
 
   const filtered = menuItems.filter((item) => {
     const matchCategory = activeCategory === "All" || item.category === activeCategory;
@@ -182,7 +193,7 @@ const MobileMenu = () => {
 
   const handleCheckout = () => {
     if (cartCount === 0) return;
-    navigate("/cart", { state: { cart, tableId } });
+    navigate(tableId ? `/cart/${tableId}` : "/cart", { state: { cart, tableId } });
   };
 
   if (isLoading) {
@@ -305,7 +316,7 @@ const MobileMenu = () => {
               </div>
 
               <div>
-                <label className="text-sm font-semibold mb-2 block">Customer Note</label>
+                <label className="text-sm font-semibold mb-2 block" itemID="customer-note-label">Customer Note</label>
                 <textarea
                   className="w-full bg-muted text-foreground placeholder-muted-foreground rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-primary/50 resize-none"
                   rows={3}
