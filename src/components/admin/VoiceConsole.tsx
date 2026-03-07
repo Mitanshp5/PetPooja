@@ -25,10 +25,14 @@ export const VoiceConsole = () => {
             setError(null);
             setTranscript([]);
 
-            // 1. Fetch API Key from backend
+            // 1. Fetch API Key and Live Menu Items from backend
             const configResp = await fetch("http://localhost:8000/config/gemini-key");
             const { api_key } = await configResp.json();
             if (!api_key) throw new Error("API Key not found on server.");
+            
+            const menuResp = await fetch("http://localhost:8000/menu-items/");
+            const menuData = await menuResp.json();
+            const liveMenuContext = menuData.items?.map((m: any) => m.name).join(", ") || menuData.map((m: any) => m.name).join(", ");
 
             // 2. Initialize Audio Context & Effects
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
@@ -59,8 +63,10 @@ export const VoiceConsole = () => {
 
             effectsChainRef.current = { compressor, lowShelf, highBoost };
 
-            // 3. Get User Media
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // 3. Get User Media with strict Echo Cancellation
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+            });
             streamRef.current = stream;
             const source = audioContextRef.current.createMediaStreamSource(stream);
 
@@ -93,7 +99,8 @@ export const VoiceConsole = () => {
 1. NEVER THINK OUT LOUD. NEVER explain what you are doing. NEVER output your internal thoughts or plans.
 2. ONLY output the FINAL WORDS you want the customer to hear. 
 3. YOUR VERY FIRST RESPONSE MUST BE EXACTLY: 'Namaste! PetPooja mein aapka swagat hai. Main aapki kaise sahayata kar sakti hoon?'
-4. ALWAYS use the 'process_order' tool immediately when users order.`
+4. ALWAYS use the 'process_order' tool immediately when users order.
+5. Menu Context: ${liveMenuContext}.`
                             }]
                         },
                         tools: [{
@@ -150,7 +157,13 @@ export const VoiceConsole = () => {
 
                     // Start Mic Processing
                     source.connect(processorRef.current!);
-                    processorRef.current!.connect(audioContextRef.current!.destination);
+                    
+                    // Route to a silent gain node to prevent speaker feedback loop
+                    const silentNode = audioContextRef.current!.createGain();
+                    silentNode.gain.value = 0;
+                    processorRef.current!.connect(silentNode);
+                    silentNode.connect(audioContextRef.current!.destination);
+                    
                     processorRef.current!.onaudioprocess = (e) => {
                         const inputData = e.inputBuffer.getChannelData(0);
                         const int16Data = new Int16Array(inputData.length);
@@ -202,13 +215,7 @@ export const VoiceConsole = () => {
                         recognitionRef.current.start();
                     }
 
-                    // Initial spark to trigger the greeting
-                    socketRef.current?.send(JSON.stringify({
-                        clientContent: {
-                            turns: [{ role: "user", parts: [{ text: "Hello" }] }],
-                            turnComplete: true
-                        }
-                    }));
+                    // Skip the second duplicate trigger here as WARM START handled it
                 }
 
                 if (data.serverContent) {
