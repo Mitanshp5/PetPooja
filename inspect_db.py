@@ -1,10 +1,15 @@
+import os
 import asyncio
+from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 
+# Load environment variables
+load_dotenv(dotenv_path="backend/.env")
+
 # Configuration
-MONGODB_URL = "mongodb+srv://mitanshquotes_db_user:UQbvyA51oZjRuJqP@petpooja.0uub5oo.mongodb.net/?appName=PetPooja"
-DATABASE_NAME = "petpooja_db"
+MONGODB_URL = os.getenv("MONGODB_URL")
+DATABASE_NAME = os.getenv("DATABASE_NAME", "petpooja_db")
 
 async def inspect_db():
     client = AsyncIOMotorClient(MONGODB_URL)
