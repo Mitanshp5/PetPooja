@@ -26,10 +26,11 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
             setError(null);
 
             // 1. Fetch Config, Menu, and Combos
+            const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
             const [configResp, menuResp, comboResp] = await Promise.all([
-                fetch("http://localhost:8000/config/gemini-key"),
-                fetch("http://localhost:8000/menu-items/"),
-                fetch("http://localhost:8000/revenue/combos")
+                fetch(`${API_BASE}/config/gemini-key`),
+                fetch(`${API_BASE}/menu-items/`),
+                fetch(`${API_BASE}/revenue/combos`)
             ]);
 
             const { api_key } = await configResp.json();
