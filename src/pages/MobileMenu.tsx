@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Search, Leaf, ShoppingCart, Plus, Minus, QrCode, Loader2, X } from "lucide-react";
+import { Search, Leaf, ShoppingCart, Plus, Minus, QrCode, Loader2, X, AlertCircle } from "lucide-react";
 import VoiceOrderingAssistant from "@/components/voice/VoiceOrderingAssistant";
 import { toast } from "sonner";
 import { usePlaceOrder, useMenu } from "@/hooks/useApi";
@@ -19,7 +19,7 @@ const MobileMenu = () => {
   const { tableId } = useParams();
   const navigate = useNavigate();
   const { mutateAsync: placeOrder } = usePlaceOrder();
-  const { data: menuItems = [], isLoading } = useMenu();
+  const { data: menuItems = [], isLoading, isError, error: menuError } = useMenu();
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -200,7 +200,28 @@ const MobileMenu = () => {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-5">
         <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground font-medium">Loading Paratha Singh Menu...</p>
+        <p className="text-muted-foreground font-medium text-center">Loading Paratha Singh Menu...</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-5 text-center">
+        <AlertCircle className="w-12 h-12 text-destructive mb-4" />
+        <h2 className="text-xl font-bold mb-2">Connection Error</h2>
+        <p className="text-muted-foreground mb-6">
+          Failed to fetch the menu. Please check your internet connection or backend status.
+        </p>
+        <div className="bg-muted p-3 rounded-lg text-xs font-mono mb-6 max-w-full overflow-auto">
+          {menuError instanceof Error ? menuError.message : "Network error or API is down"}
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-semibold"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
@@ -249,43 +270,54 @@ const MobileMenu = () => {
 
       {/* Items */}
       <div className="px-5 pb-28 space-y-3">
-        {filtered.map((item) => {
-          const id = (item.id || item._id) as string;
-          return (
-            <div key={id} className="bg-card rounded-xl p-4 shadow-card border border-border flex items-center gap-4 animate-slide-in">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-4 h-4 rounded border-2 flex items-center justify-center border-chart-green">
-                    <span className="w-2 h-2 rounded-full bg-chart-green" />
-                  </span>
-                  <h3 className="font-display font-semibold text-card-foreground truncate">{item.name}</h3>
-                </div>
-                {item.description && <p className="text-xs text-muted-foreground mb-2 line-clamp-1">{item.description}</p>}
-                <span className="font-bold text-foreground">₹{item.selling_price}</span>
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                {getQty(id) > 0 ? (
-                  <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-1">
-                    <button onClick={() => removeOneFromCart(id)} className="w-7 h-7 flex items-center justify-center text-primary">
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <span className="text-sm font-bold text-primary w-4 text-center">{getQty(id)}</span>
-                    <button onClick={() => handleOpenCustomization(item)} className="w-7 h-7 flex items-center justify-center text-primary">
-                      <Plus className="w-4 h-4" />
-                    </button>
+        {menuItems.length === 0 ? (
+          <div className="bg-muted/30 rounded-2xl p-8 text-center border-2 border-dashed border-muted">
+            <p className="text-muted-foreground italic mb-2">Wait, the kitchen is quiet!</p>
+            <p className="text-sm font-medium">No menu items found in the database.</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">No items match your search for "{search}"</p>
+          </div>
+        ) : (
+          filtered.map((item) => {
+            const id = (item.id || item._id) as string;
+            return (
+              <div key={id} className="bg-card rounded-xl p-4 shadow-card border border-border flex items-center gap-4 animate-slide-in">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-4 h-4 rounded border-2 flex items-center justify-center border-chart-green">
+                      <span className="w-2 h-2 rounded-full bg-chart-green" />
+                    </span>
+                    <h3 className="font-display font-semibold text-card-foreground truncate">{item.name}</h3>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => handleOpenCustomization(item)}
-                    className="px-4 py-1.5 rounded-lg border-2 border-primary text-primary text-sm font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
-                  >
-                    ADD
-                  </button>
-                )}
+                  {item.description && <p className="text-xs text-muted-foreground mb-2 line-clamp-1">{item.description}</p>}
+                  <span className="font-bold text-foreground">₹{item.selling_price}</span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  {getQty(id) > 0 ? (
+                    <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-1">
+                      <button onClick={() => removeOneFromCart(id)} className="w-7 h-7 flex items-center justify-center text-primary">
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="text-sm font-bold text-primary w-4 text-center">{getQty(id)}</span>
+                      <button onClick={() => handleOpenCustomization(item)} className="w-7 h-7 flex items-center justify-center text-primary">
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleOpenCustomization(item)}
+                      className="px-4 py-1.5 rounded-lg border-2 border-primary text-primary text-sm font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
+                    >
+                      ADD
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })
+        )}
       </div>
 
       {/* Customization Modal */}
