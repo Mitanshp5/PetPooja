@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 export const getRevenueAnalysis = async () => {
     const response = await fetch(`${API_BASE_URL}/revenue/analysis`);
