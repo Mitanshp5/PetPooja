@@ -40,7 +40,7 @@ const VoiceOrderingAssistant: React.FC<VoiceOrderingAssistantProps> = ({ onCartU
 
             const menuContext = menuItems.map((item: any) => `${item.name} (${item.category})`).join(", ");
             const comboContext = comboData.recommendations.map((c: any) =>
-                `If they order ${c.primary_item_name}, recommend ${c.recommended_item_name}`
+                `${c.is_promoted ? "[PRIORITY SPECIAL]: " : ""}If they order ${c.primary_item_name}, recommend ${c.recommended_item_name}`
             ).join(". ");
 
             const now = new Date();
@@ -108,7 +108,7 @@ DO NOT OUTPUT ANY TEXT. ONLY OUTPUT AUDIO. NEVER EXPLAIN YOUR ACTIONS IN TEXT.
 BE EXTREMELY CONCISE. Minimize filler words. Don't speak more than necessary. 
 1. Speak SLOWLY, POLITELY and CALMLY in a professional Indian accent.
 2. MENU KNOWLEDGE: You ONLY sell these items: ${menuContext}. Efficiently handle off-menu requests.
-3. CONTEXTUAL UPSLELLING: ${timeContext} ${comboContext}. Be brief with suggestions.
+3. CONTEXTUAL UPSLELLING: ${timeContext} ${comboContext}. Items marked as [PRIORITY SPECIAL] are highly recommended for upselling. Be brief with suggestions.
 4. HYDRATION: ONLY when the customer is ready to confirm the final order, check if they have already added a 'Water Bottle' or 'Bisleri'. If they have NOT ordered water, briefly say 'Kya main aapke liye paani ki ek bottle add kar doon?' before summarizing for 'place_order'.
 5. SPECIAL REQUESTS: Quickly ask for 'Spicy', 'Jain', 'Less Oily', or comments for each item.
 6. TOOL USAGE: 

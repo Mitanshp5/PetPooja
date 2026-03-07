@@ -1,18 +1,36 @@
 import { useEffect, useState } from "react";
-import { Sparkles, TrendingUp, Loader2 } from "lucide-react";
+import { Sparkles, TrendingUp, Loader2, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getComboRecommendations } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { getComboRecommendations, promoteCombo } from "@/lib/api";
+import { toast } from "sonner";
 
 const ComboSuggestions = () => {
   const [combos, setCombos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchCombos = () => {
+    setLoading(true);
     getComboRecommendations()
       .then((data) => setCombos(data.recommendations || []))
       .catch(() => setCombos([]))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchCombos();
   }, []);
+
+  const handlePromote = async (combo: any) => {
+    try {
+      const newStatus = !combo.is_promoted;
+      await promoteCombo(combo.primary_item_id, combo.recommended_item_id, newStatus);
+      toast.success(newStatus ? "Combo promoted!" : "Combo demoted");
+      fetchCombos(); // Refresh list
+    } catch (err) {
+      toast.error("Failed to update combo status");
+    }
+  };
 
   return (
     <div className="bg-card rounded-lg shadow-card border border-border animate-slide-in">
@@ -39,6 +57,11 @@ const ComboSuggestions = () => {
             <div key={idx} className="p-5 flex items-center justify-between gap-4">
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
+                  {combo.is_promoted && (
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 flex items-center gap-1 animate-pulse">
+                      <Star className="w-3 h-3 fill-primary" /> PROMOTED
+                    </Badge>
+                  )}
                   <span className="font-medium text-card-foreground">{combo.primary_item_name}</span>
                   <span className="text-muted-foreground mx-1">+</span>
                   <span className="font-medium text-card-foreground">{combo.recommended_item_name}</span>
@@ -52,12 +75,19 @@ const ComboSuggestions = () => {
                     )}% confidence
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    Popular pairing
+                    {combo.is_promoted ? "Prioritized for AI Upselling" : "Popular pairing"}
                   </span>
                 </div>
               </div>
-              <Button size="sm" className="gradient-warm text-primary-foreground border-0 shadow-glow hover:opacity-90">
-                Promote
+              <Button
+                size="sm"
+                onClick={() => handlePromote(combo)}
+                className={`transition-all duration-300 ${combo.is_promoted
+                  ? "bg-muted text-muted-foreground hover:bg-destructive hover:text-destructive-foreground shadow-none"
+                  : "gradient-warm text-primary-foreground border-0 shadow-glow hover:opacity-90"
+                  }`}
+              >
+                {combo.is_promoted ? "Demote" : "Promote"}
               </Button>
             </div>
           ))
